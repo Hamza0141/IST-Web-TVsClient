@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { fetchDisplayData } from "../services/publicApi";
 import { getNextPrayer, getCountdown } from "../utils/prayerUtils";
 import { formatTime, formatClock } from "../utils/formatters";
@@ -15,6 +15,7 @@ function buildTodayDateFromTime(timeString) {
 
   const date = new Date();
   date.setHours(h, m, s, 0);
+
   return date;
 }
 
@@ -52,7 +53,10 @@ function formatSecondsCountdown(targetDate) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
 
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+    2,
+    "0"
+  )}`;
 }
 
 function AnalogClock({ clock }) {
@@ -83,7 +87,9 @@ function AnalogClock({ clock }) {
             >
               <div
                 className={`rounded-full ${
-                  isMain ? "h-4 w-4 bg-slate-400" : "h-2.5 w-2.5 bg-slate-300"
+                  isMain
+                    ? "h-4 w-4 bg-slate-400"
+                    : "h-2.5 w-2.5 bg-slate-300"
                 }`}
                 style={{
                   transform: "translateY(-150px)",
@@ -143,8 +149,6 @@ export default function DisplayPage() {
   const [sceneIndex, setSceneIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
 
-  const scenes = ["prayers", "announcements", "slides"];
-
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(timer);
@@ -171,6 +175,7 @@ export default function DisplayPage() {
     }
 
     load();
+
     const interval = setInterval(load, 30000);
 
     return () => {
@@ -193,18 +198,32 @@ export default function DisplayPage() {
     return getIqamahCountdownPrayer(prayers);
   }, [prayers, clock]);
 
-const hijriText = useMemo(() => {
-  if (!hijri) return "Smart Mosque System";
+  const scenes = useMemo(() => {
+    const activeScenes = ["prayers"];
 
-  const monthEn = hijri?.month?.en || "";
-  const monthAr = hijri?.month?.ar || "";
+    if (announcements.length > 0) {
+      activeScenes.push("announcements");
+    }
 
-  if (monthEn && monthAr) {
-    return `${hijri.day} ${monthEn} (${monthAr}) ${hijri.year}`;
-  }
+    if (slides.length > 0) {
+      activeScenes.push("slides");
+    }
 
-  return `${hijri.day} ${monthEn || monthAr} ${hijri.year}`;
-}, [hijri]);
+    return activeScenes;
+  }, [announcements.length, slides.length]);
+
+  const hijriText = useMemo(() => {
+    if (!hijri) return "Smart Mosque System";
+
+    const monthEn = hijri?.month?.en || "";
+    const monthAr = hijri?.month?.ar || "";
+
+    if (monthEn && monthAr) {
+      return `${hijri.day} ${monthEn} (${monthAr}) ${hijri.year}`;
+    }
+
+    return `${hijri.day} ${monthEn || monthAr} ${hijri.year}`;
+  }, [hijri]);
 
   const gregorianText = useMemo(() => {
     if (readableDate) return readableDate;
@@ -219,16 +238,25 @@ const hijriText = useMemo(() => {
   }, [iqamahCountdownPrayer]);
 
   useEffect(() => {
-    if (!data) return;
+    if (sceneIndex >= scenes.length) {
+      setSceneIndex(0);
+    }
+  }, [sceneIndex, scenes.length]);
 
-    const currentScene = scenes[sceneIndex];
+  useEffect(() => {
+    if (slideIndex >= slides.length) {
+      setSlideIndex(0);
+    }
+  }, [slideIndex, slides.length]);
+
+  useEffect(() => {
+    if (!data || scenes.length === 0) return;
+
+    const currentScene = scenes[sceneIndex] || "prayers";
     let duration = 10000;
 
     if (currentScene === "prayers") {
-      duration = 22000;
-      if (iqamahCountdownPrayer) {
-        duration = 1000;
-      }
+      duration = iqamahCountdownPrayer ? 1000 : 22000;
     }
 
     if (currentScene === "announcements") {
@@ -250,6 +278,7 @@ const hijriText = useMemo(() => {
           setSlideIndex((prev) => prev + 1);
           return;
         }
+
         setSlideIndex(0);
       }
 
@@ -257,7 +286,14 @@ const hijriText = useMemo(() => {
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [sceneIndex, slideIndex, slides, data, iqamahCountdownPrayer]);
+  }, [
+    sceneIndex,
+    slideIndex,
+    slides,
+    data,
+    iqamahCountdownPrayer,
+    scenes,
+  ]);
 
   if (loading) {
     return (
@@ -279,13 +315,21 @@ const hijriText = useMemo(() => {
           <div className="text-3xl font-bold text-red-600">
             Display unavailable
           </div>
+
           <p className="mt-4 text-xl text-red-500">{error}</p>
+
+          <Link
+            to="/"
+            className="mt-6 inline-block rounded-2xl bg-emerald-600 px-5 py-3 font-semibold text-white"
+          >
+            Choose Another Display
+          </Link>
         </div>
       </div>
     );
   }
 
-  const currentScene = scenes[sceneIndex];
+  const currentScene = scenes[sceneIndex] || "prayers";
   const currentSlide = slides[slideIndex];
 
   return (
@@ -302,8 +346,11 @@ const hijriText = useMemo(() => {
             <div>
               <h1 className="text-4xl font-bold">Islamic Society of Tulsa</h1>
               <p className="mt-1 text-2xl text-slate-500">{hijriText}</p>
+
               {gregorianText ? (
-                <p className="mt-1 text-lg text-slate-400">{gregorianText}</p>
+                <p className="mt-1 text-lg text-slate-400">
+                  {gregorianText}
+                </p>
               ) : null}
             </div>
 
@@ -311,7 +358,16 @@ const hijriText = useMemo(() => {
               <div className="text-sm uppercase tracking-wide text-slate-400">
                 Screen
               </div>
-              <div className="text-lg font-semibold">{screen?.screen_code}</div>
+
+              <div className="text-lg font-semibold">
+                {screen?.screen_name || screen?.screen_code || screenCode}
+              </div>
+
+              {screen?.location_name ? (
+                <div className="text-sm text-slate-400">
+                  {screen.location_name}
+                </div>
+              ) : null}
             </div>
           </div>
         </header>
@@ -335,7 +391,9 @@ const hijriText = useMemo(() => {
 
                   <div className="mt-8 rounded-[32px] bg-emerald-600 px-10 py-8 text-white shadow-xl">
                     <div className="text-7xl font-bold tracking-wider md:text-8xl">
-                      {formatSecondsCountdown(iqamahCountdownPrayer.iqamahDate)}
+                      {formatSecondsCountdown(
+                        iqamahCountdownPrayer.iqamahDate
+                      )}
                     </div>
                   </div>
 
@@ -352,6 +410,7 @@ const hijriText = useMemo(() => {
                   <div>
                     <div className="mb-6 text-center xl:text-left">
                       <h2 className="text-5xl font-bold">Prayer Times</h2>
+
                       {nextPrayer ? (
                         <p className="mt-3 text-2xl text-emerald-700">
                           Next: {nextPrayer.prayer_name} •{" "}
@@ -373,9 +432,11 @@ const hijriText = useMemo(() => {
                           className="grid grid-cols-3 border-t border-slate-200 px-6 py-5 text-2xl"
                         >
                           <div className="font-semibold">{p.prayer_name}</div>
+
                           <div className="text-center">
                             {formatTime(p.adhan_time)}
                           </div>
+
                           <div className="text-center">
                             {formatTime(p.iqama_time)}
                           </div>
@@ -395,28 +456,24 @@ const hijriText = useMemo(() => {
               </div>
 
               <div className="mx-auto w-full max-w-5xl space-y-6">
-                {announcements.length ? (
-                  announcements.map((a) => (
-                    <div
-                      key={a.id}
-                      className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-sm"
-                    >
-                      <div className="mb-3 flex items-center justify-between gap-4">
-                        <h3 className="text-3xl font-bold">{a.title}</h3>
-                        <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold uppercase text-emerald-800">
-                          {a.priority}
-                        </span>
-                      </div>
-                      <p className="text-2xl leading-10 text-slate-700">
-                        {a.body}
-                      </p>
+                {announcements.map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-sm"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-4">
+                      <h3 className="text-3xl font-bold">{a.title}</h3>
+
+                      <span className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold uppercase text-emerald-800">
+                        {a.priority}
+                      </span>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center text-2xl text-slate-500">
-                    No announcements
+
+                    <p className="text-2xl leading-10 text-slate-700">
+                      {a.body}
+                    </p>
                   </div>
-                )}
+                ))}
               </div>
             </div>
           )}
@@ -442,7 +499,7 @@ const hijriText = useMemo(() => {
               ) : null}
 
               <div className="mt-8 text-lg text-slate-400">
-                Slide {slideIndex + 1} of {slides.length || 1}
+                Slide {slideIndex + 1} of {slides.length}
               </div>
             </div>
           )}
